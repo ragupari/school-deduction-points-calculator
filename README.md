@@ -1,4 +1,7 @@
 # SCHOOL DEDUCTION POINT CALCULATOR 
+
+## Demo 
+Can watch the demo on [Youtube](https://youtu.be/TK8zg94yjFQ?si=hduZNPY8J0XZhX3x)
 <img src="/Images/image1.png" alt="Alt text" width="500" height="300">
 <img src="/Images/image2.png" alt="Alt text" width="500" height="300">
 <img src="/Images/image3.png" alt="Alt text" width="500" height="300">
