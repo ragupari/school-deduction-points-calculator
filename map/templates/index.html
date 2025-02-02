@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Points Calculator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&libraries=geometry,places&callback=initMap" async defer></script>
+    {% comment %} <script>
+        window.onload = function() {
+            alert("{{ test}}");
+        };
+    </script> {% endcomment %}
+    
+    <script>
+        function loadMap() {
+            const mapContainer = document.getElementById('map-container');
+
+            // Check if the map is loaded by verifying if the map object exists
+            if (!map || !mapContainer.innerHTML.trim()) {
+                location.reload();
+            } 
+        }
+    
+        // Call the function to check map load status after a delay (e.g., 5 seconds)
+        setTimeout(loadMap, 5000);  // 5000ms = 5 seconds delay
+    </script>
+    <script>
+
+        let map, schoolMarker, homeMarker, circle, searchBox;
+
+        function initMap() {
+
+            var initialLocation = { lat: {{ lat|default:0 }}, lng: {{ lng|default:0 }} };
+
+            const schoolIcon = {
+                url: "https://cdn-icons-png.flaticon.com/128/11149/11149777.png",
+                scaledSize: new google.maps.Size(50, 50),
+                anchor: new google.maps.Point(23, 47)
+            };
+            const homeIcon = {
+                url: "https://cdn-icons-png.flaticon.com/128/1544/1544704.png",
+                scaledSize: new google.maps.Size(40, 40),
+                anchor: new google.maps.Point(23, 47)
+            };
+
+            map = new google.maps.Map(document.getElementById('map-container'), {
+                zoom: 14,
+                center: initialLocation
+            });
+
+            schoolMarker = new google.maps.Marker({
+                position: initialLocation,
+                map: map,
+                icon: schoolIcon
+            });
+
+            homeMarker = new google.maps.Marker({
+                position: { lat: 9.670053584289054, lng: 80.0100240327881 },
+                map: map,
+                draggable: true,
+                icon: homeIcon
+            });
+
+            homeMarker.addListener("dragend", () => {
+                updateHomePosition(homeMarker.getPosition());
+            });
+
+            initAutocomplete();
+            drawCircle();
+            setupCoordinateListeners();
+        }
+
+
+        function drawCircle() {
+            if (circle) circle.setMap(null);
+
+            let homePosition = homeMarker.getPosition();
+            let schoolPosition = schoolMarker.getPosition();
+            let distance = google.maps.geometry.spherical.computeDistanceBetween(homePosition, schoolPosition);
+
+            circle = new google.maps.Circle({
+                strokeColor: "blue",
+                strokeOpacity: 0.4,
+                strokeWeight: 2,
+                fillOpacity: 0,
+                map: map,
+                center: homePosition,
+                radius: distance
+            });
+        }
+
+        function updateHomePosition(position) {
+            document.getElementById("x-coordinate").value = position.lat();
+            document.getElementById("y-coordinate").value = position.lng();
+            drawCircle();
+        }
+
+        function updateMapLocation(selectElement) {
+            var selectedOption = selectElement.options[selectElement.selectedIndex];
+            var schoolData = selectedOption.getAttribute('data-school');
+
+            if (schoolData) {
+                var school = JSON.parse(schoolData);
+                var newLocation = { lat: parseFloat(school.lat), lng: parseFloat(school.lng) };
+
+                map.setCenter(newLocation);
+                schoolMarker.setPosition(newLocation);
+                drawCircle();
+            }
+        }
+
+        function initAutocomplete() {
+            const input = document.getElementById("home-address");
+            searchBox = new google.maps.places.SearchBox(input);
+
+            // Bias the searchBox results towards the current map's viewport.
+            map.addListener("bounds_changed", () => {
+                searchBox.setBounds(map.getBounds());
+            });
+
+            searchBox.addListener("places_changed", () => {
+                const places = searchBox.getPlaces();
+                if (places.length === 0) return;
+
+                const place = places[0];
+                if (!place.geometry || !place.geometry.location) return;
+
+                homeMarker.setPosition(place.geometry.location);
+                map.setCenter(place.geometry.location);
+                updateHomePosition(place.geometry.location);
+            });
+        }
+
+        function setupCoordinateListeners() {
+            document.getElementById("x-coordinate").addEventListener("change", updateHomeMarkerFromCoordinates);
+            document.getElementById("y-coordinate").addEventListener("change", updateHomeMarkerFromCoordinates);
+        }
+
+        function updateHomeMarkerFromCoordinates() {
+            let lat = parseFloat(document.getElementById("x-coordinate").value);
+            let lng = parseFloat(document.getElementById("y-coordinate").value);
+
+            if (!isNaN(lat) && !isNaN(lng)) {
+                let newPosition = new google.maps.LatLng(lat, lng);
+                homeMarker.setPosition(newPosition);
+                map.setCenter(newPosition);
+                drawCircle();
+            }
+        }
+    </script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            document.getElementById("student-form").addEventListener("submit", function (event) {
+                event.preventDefault();
+        
+                let studentName = document.getElementById("student-name").value;
+                let school_name = document.getElementById("school").value;
+                let gender = document.getElementById("gender").value;
+
+                let homeLat = homeMarker.getPosition().lat();
+                let homeLng = homeMarker.getPosition().lng();
+                let schoolLat = schoolMarker.getPosition().lat();
+                let schoolLng = schoolMarker.getPosition().lng();
+                let csrfToken = document.querySelector("[name=csrfmiddlewaretoken]").value;
+        
+                let data = {
+                    "student_name": studentName,
+                    "gender": gender,
+                    "home_lat": homeLat,
+                    "home_lng": homeLng,
+                    "school_lat": schoolLat,
+                    "school_lng": schoolLng
+                };
+        
+                fetch("{% url 'navigate' %}", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRFToken": csrfToken
+                    },
+                    body: JSON.stringify(data)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.message === "Success") {
+                        let studentNameEncoded = encodeURIComponent(studentName);
+                        let radiusEncoded = encodeURIComponent(data.radius);
+                        let nearbySchoolsEncoded = encodeURIComponent(JSON.stringify(data.nearby_schools));
+        
+                        // Redirect to calculatedPoints with parameters
+                        window.location.href = `/map/calculatedPoints/?student_name=${studentNameEncoded}&radius=${radiusEncoded}&nearby_schools=${nearbySchoolsEncoded}&h_lat=${homeLat}&h_lng=${homeLng}&s_lat=${schoolLat}&s_lng=${schoolLng}&school_name=${school_name}`;
+                    } else {
+                        alert("Something went wrong. Please try again.");
+                    }
+                })
+                .catch(error => {
+                    console.error("Error:", error);
+                    alert("Error occurred. Check console for details.");
+                });
+            });
+        });
+        
+    </script>
+    
+    
+
+
+
+
+
+
+
+
+
+
+
+</head>
+<body class="h-screen">
+    <div class="flex h-full">
+        <div id="map-container" class="w-2/3 bg-gray-200">
+            <p class="text-center pt-4">Google Maps will be loaded here! Reload if you don't see a map {{ coordinates }}</p>
+        </div>
+        <div class="w-1/3 p-6 bg-gray-100">
+            <div class="h-4"></div> 
+            <h2 class="text-2xl text-center font-bold text-gray-800 mb-4">Student Details</h2>
+
+            <form id="student-form" class="space-y-4">
+                {% csrf_token %}
+                <div>
+                    <label for="school" class="block text-lg font-medium text-gray-700">School Applied For</label>
+                    <select id="school" name="school" class="mt-1 text-lg block w-full" onchange="updateMapLocation(this)">
+                        {% for item in schoollist %}
+                            <option value="{{ item.name }}" data-school='{"name": "{{ item.name|escapejs }}", "lat": {{ item.lat }}, "lng": {{ item.lng }}}'>{{ item.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="flex space-x-4">
+                    <div class="w-3/4">
+                        <label for="student-name" class="block text-lg font-medium text-gray-700">Student Name</label>
+                        <input type="text" id="student-name" name="student-name" class="mt-1 block w-full" placeholder="Enter student name">
+                    </div>
+                    <div class="w-1/4">
+                        <label for="gender" class="block text-lg font-medium text-gray-700">Gender</label>
+                        <select id="gender" name="gender" class="mt-1 text-lg block w-full" required>
+                            <option value="Male">Male</option>
+                            <option value="Female">Female</option>
+                        </select>
+                    </div>
+                </div>
+
+                <label for="address" class="block text-lg font-medium text-gray-700">Student Home Address</label>
+
+                <div class="border rounded-lg pt-2 px-4 pb-4">
+                    <div>
+                        <label for="home-address" class="block text-l font-medium text-gray-700">Search Home Address</label>
+                        <input type="text" id="home-address" name="home-address" class="mt-1 block w-full" placeholder="Enter home address (Optional)">
+                    </div>
+                    <div class="mt-4">
+                        <label for="x-coordinate" class="block text-l font-medium text-gray-700">Latitude</label>
+                        <input type="text" id="x-coordinate" name="x-coordinate" placeholder="Drag the home marker to set latitude" class="mt-1 block w-full" required>
+                    </div>
+                    <div class="mt-4">
+                        <label for="y-coordinate" class="block text-l font-medium text-gray-700">Longitude</label>
+                        <input type="text" id="y-coordinate" name="y-coordinate" placeholder="Drag the home marker to set longitude" class="mt-1 block w-full" required>
+                    </div>
+                </div>
+                <div class="h-1"></div> 
+                <div>
+                    <button type="submit" class="w-full py-2 px-4 bg-indigo-500 text-white rounded-md">Calculate Deduction Points</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

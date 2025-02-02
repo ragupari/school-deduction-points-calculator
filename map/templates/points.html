@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Points Calculator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&callback=initMap&libraries=geometry" async defer></script>
+    <script>
+        function loadMap() {
+            const mapContainer = document.getElementById('map-container');
+
+            // Check if the map is loaded by verifying if the map object exists
+            if (!map || !mapContainer.innerHTML.trim()) {
+                location.reload();
+            } 
+        }
+    
+        // Call the function to check map load status after a delay (e.g., 5 seconds)
+        setTimeout(loadMap, 5000);  // 5000ms = 5 seconds delay
+    </script>
+    <script>
+        function initMap() {
+            const initialLocation = { lat: {{h_lat}}, lng: {{h_lng}} };
+            map = new google.maps.Map(document.getElementById('map-container'), {
+                zoom: 14,
+                center: initialLocation,
+                type: 'roadmap'
+            });
+        
+            const schoolIcon = {
+                url: "https://cdn-icons-png.flaticon.com/128/11149/11149777.png",
+                scaledSize: new google.maps.Size(50, 50),
+                anchor: new google.maps.Point(23, 47)
+            };
+            const nearby_schoolIcon = {
+                url: "https://cdn-icons-png.flaticon.com/128/4902/4902082.png",
+                scaledSize: new google.maps.Size(40, 40),
+                anchor: new google.maps.Point(23, 47)
+            };
+            const homeIcon = {
+                url: "https://cdn-icons-png.flaticon.com/128/1544/1544704.png",
+                scaledSize: new google.maps.Size(40, 40),
+                anchor: new google.maps.Point(23, 47)
+            };
+        
+            var bounds = new google.maps.LatLngBounds();
+            var schools = {{ nearby_schools|safe }}; 
+        
+            var homePosition = { lat: {{h_lat}}, lng: {{h_lng}} };
+            var homeMarker = new google.maps.Marker({
+                position: homePosition,
+                map: map,
+                icon: homeIcon,
+                title: "Home"
+            });
+        
+            // Adding label for Home marker
+            homeMarker.setLabel({
+                text: "Home",
+                color: 'Black',
+                fontSize: '14px',
+                fontWeight: 'bold',
+                backgroundColor: 'blue', // Background color for Home label
+                padding: '5px',
+                borderRadius: '5px'
+            });
+        
+            // Initially hide label for Home marker
+            homeMarker.setLabel(null);
+        
+            // Show label on hover for Home
+            google.maps.event.addListener(homeMarker, 'mouseover', function() {
+                homeMarker.setLabel({
+                    text: "Student's home",
+                    color: 'Black',
+                    fontSize: '14px',
+                    fontWeight: 'bold',
+                    backgroundColor: 'blue',
+                    padding: '5px',
+                    borderRadius: '5px'
+                });
+            });
+        
+            // Hide label on mouse out for Home
+            google.maps.event.addListener(homeMarker, 'mouseout', function() {
+                homeMarker.setLabel(null);
+            });
+        
+            var schoolPosition = { lat: {{s_lat}}, lng: {{s_lng}} };
+            var schoolMarker = new google.maps.Marker({
+                position: schoolPosition,
+                map: map,
+                icon: schoolIcon,
+                title: "School"
+            });
+        
+            // Adding label for School marker
+            schoolMarker.setLabel({
+                text: "School",
+                color: 'Black',
+                fontSize: '14px',
+                fontWeight: 'bold',
+                backgroundColor: 'green', // Background color for School label
+                padding: '5px',
+                borderRadius: '5px'
+            });
+        
+            // Initially hide label for School marker
+            schoolMarker.setLabel(null);
+        
+            // Show label on hover for School
+            google.maps.event.addListener(schoolMarker, 'mouseover', function() {
+                schoolMarker.setLabel({
+                    text: "School applied for",
+                    color: 'black',
+                    fontSize: '14px',
+                    fontWeight: 'bold',
+                    backgroundColor: 'green',
+                    padding: '5px',
+                    borderRadius: '5px'
+                });
+            });
+            const radiusInMeters = {{ radius }} * 1000; 
+            const circle = new google.maps.Circle({
+                map: map,
+                center: homePosition,
+                radius: radiusInMeters,
+                strokeColor: 'Red',
+                strokeOpacity: 0.8,
+                strokeWeight: 2,
+                fillColor: 'red',
+                fillOpacity: 0
+            });
+        
+            // Hide label on mouse out for School
+            google.maps.event.addListener(schoolMarker, 'mouseout', function() {
+                schoolMarker.setLabel(null);
+            });
+        
+            // Draw the circle around each nearby school
+            if (schools.length > 0) {
+                schools.forEach(function(school) {
+                    var position = { lat: school.lat, lng: school.lng };
+                    var marker = new google.maps.Marker({
+                        position: position,
+                        map: map,
+                        title: school.name,
+                        icon: nearby_schoolIcon,
+                        label: {
+                            text: school.name,
+                            color: 'black',
+                            fontSize: '12px',
+                            fontWeight: 'bold'
+                        },
+                        labelOrigin: new google.maps.Point(0, 25)  // Adjust label position (below the marker)
+                    });
+        
+                    // Initially, hide the label
+                    marker.setLabel(null);
+        
+                    // Show the label on hover
+                    google.maps.event.addListener(marker, 'mouseover', function() {
+                        marker.setLabel({
+                            text: school.name,
+                            color: 'black',
+                            fontSize: '12px',
+                            fontWeight: 'bold'
+                        });
+                    });
+        
+                    // Hide the label when mouse leaves
+                    google.maps.event.addListener(marker, 'mouseout', function() {
+                        marker.setLabel(null);
+                    });
+        
+                    // Create a circle around each school with home as center
+                    const circle = new google.maps.Circle({
+                        map: map,
+                        center: homePosition, // The circle is centered on the homeMarker's position
+                        radius: google.maps.geometry.spherical.computeDistanceBetween(
+                            new google.maps.LatLng(homePosition.lat, homePosition.lng),
+                            new google.maps.LatLng(position.lat, position.lng)
+                        ), // Calculate the radius based on distance to the school
+                        strokeColor: 'red',
+                        strokeOpacity: 0.3,
+                        strokeWeight: 1,
+                        fillColor: 'red',
+                        fillOpacity: 0.05
+                    });
+        
+                    bounds.extend(position);
+                });
+                map.fitBounds(bounds);
+            }
+        }
+    </script>
+</head>
+<body class="h-screen flex bg-gray-50">
+    <div id="map-container" class="w-full lg:w-2/3 h-full bg-gray-200">
+        <p class="text-center pt-4 text-lg text-gray-700">Google Maps with school locations will be loaded here</p>
+    </div>
+    <div class="w-full lg:w-1/3 p-6 bg-gray-100 overflow-y-auto flex flex-col">
+
+        <!-- Back to Page Button -->
+        <div class="grid grid-cols-5">
+            <div class="flex justify-start items-center">
+                <a href="{% url 'map' %}" class=" text-black  rounded  hover:text-indigo-700">
+                    ← Back
+                </a>
+
+                
+                  
+            </div>
+            <div class="col-span-3 flex justify-center items-center">
+             
+            </div>
+            <div class="flex justify-start items-center">
+           
+              </div>
+          </div>
+          <h2 class="text-2xl text-center font-bold text-gray-800 mb-4">Student Details</h2>
+          
+
+          <p class="mb-2 text-sm text-gray-700">
+            <strong>Student Name :  </strong> 
+            {% if student_name %}
+                <span class="inline-flex items-center rounded-md bg-indigo-50 px-2 py-1 text-sm font-medium text-indigo-700 ring-1 ring-indigo-700/10 ring-inset">
+                    {{ student_name }}
+                </span>
+            {% else %}
+                    Not Available
+         
+            {% endif %}
+        </p>
+        
+        <p class="mb-2 text-sm text-gray-700"><strong>School Applied: </strong> <span class="inline-flex items-center rounded-md bg-indigo-50 px-2 py-1 text-sm font-medium text-indigo-700 ring-1 ring-indigo-700/10 ring-inset">{{school_name}}</span></p>
+        <div class="h-10"></div> 
+        {% if nearby_schools %}
+        <h2 class="text-xl font-semibold text-gray-800 mb-2">Nearby Schools</h2>
+        {% endif %}
+        <div class="overflow-x-auto">
+            {% if nearby_schools %}
+                <table class="min-w-full bg-white border border-gray-300 rounded-lg shadow-md rounded-md">
+                    
+                    <thead class="bg-indigo-500 rounded-md">
+                        <tr>
+                            <th class="py-2 px-4 border-b text-left text-sm font-semibold text-white">School Name</th>
+                            <th class="py-2 px-4 border-b text-center text-sm font-semibold text-white">Gender</th>
+                            <th class="py-2 px-4 border-b text-center text-sm font-semibold text-white">Points</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for school in nearby_schools %}
+                        <tr>
+                            <td class="py-2 px-4 border-b text-sm text-gray-700">{{ school.name }}</td>
+                            <td class="py-2 px-4 border-b text-center text-sm text-gray-700">{{ school.gender }}</td>
+                            <td class="py-2 px-4 border-b text-center text-sm text-gray-700">-5</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <p class="text-sm text-center text-gray-700">No nearby schools found with in this range.</p>
+            {% endif %}
+        </div>
+
+        <div class="mt-auto">
+            <p class="text-xl font-semibold text-gray-800 mt-4">Total Deduction Points: 
+                <span class="inline-flex items-center rounded-md bg-indigo-50 px-2 py-1 text-l font-medium text-indigo-700 ring-1 ring-indigo-700/10 ring-inset">{{points}} points</span>
+            </p>
+        </div>
+    </div>
+</body>
+</html>
